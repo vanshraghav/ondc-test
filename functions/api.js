@@ -1,10 +1,11 @@
 const express = require('express');
+const serverless = require('serverless-http');
 const bodyParser = require('body-parser');
 const crypto = require('crypto');
 const _sodium = require('libsodium-wrappers');
-const serverless = require('serverless-http');
 
-const port = 3000;
+const app = express();
+
 const ENCRYPTION_PRIVATE_KEY =
   'MC4CAQAwBQYDK2VuBCIEIPAC60XJgwHtjoXvRN6Lt4QuMosSJzh2wt9KQB6+8LVE';
 const ONDC_PUBLIC_KEY =
@@ -12,19 +13,24 @@ const ONDC_PUBLIC_KEY =
 const REQUEST_ID = 'e32c5bbf-af81-4a4e-96f9-cb4a3bbe7ab0';
 const SIGNING_PRIVATE_KEY =
   'khRaBnltQraVLivcqw/JZWzyIupcWeQFUUCFsuijj8io7dAUUUxgN5DOKpuq4TEWdyXXlm1iCDSRICzp6nzogg==';
+
 const indexHtml = `
-  <html>
-    <head>
-    </head>
-    <body>
-      <h1>This is Golden Jewellery!!</h1> <br>
-    </body>
-  </html>
-  `;
+<html>
+  <head>
+  </head>
+  <body>
+    <h1>This is Golden Jewellery !!</h1> <br>
+  </body>
+</html>
+`;
+
 const htmlFile = `
 <html>
   <head>
-    <meta name="ondc-site-verification" content="SIGNED_UNIQUE_REQ_ID" />
+    <meta
+      name="ondc-site-verification"
+      content="SIGNED_UNIQUE_REQ_ID"
+    />
   </head>
   <body>
     <h1>ONDC Site Verification Page</h1>
@@ -37,6 +43,7 @@ const privateKey = crypto.createPrivateKey({
   format: 'der',
   type: 'pkcs8',
 });
+
 const publicKey = crypto.createPublicKey({
   key: Buffer.from(ONDC_PUBLIC_KEY, 'base64'),
   format: 'der',
@@ -48,33 +55,60 @@ const sharedKey = crypto.diffieHellman({
   publicKey: publicKey,
 });
 
-const app = express();
 app.use(bodyParser.json());
 
-const router = express.Router(); // Create a router instance
+app.get('/', (req, res) => {
+  res.send(indexHtml + ' Hello World!');
+});
 
-router.post('/on_subscribe', function (req, res) {
+app.post('/add', (req, res) => {
+  res.send('New record added.');
+});
+
+app.delete('/', (req, res) => {
+  res.send('Deleted existing record');
+});
+
+app.put('/', (req, res) => {
+  res.send('Updating existing record');
+});
+
+app.get('/demo', (req, res) => {
+  res.json([
+    {
+      id: '001',
+      name: 'Smith',
+      email: 'smith@gmail.com',
+    },
+    {
+      id: '002',
+      name: 'Sam',
+      email: 'sam@gmail.com',
+    },
+    {
+      id: '003',
+      name: 'lily',
+      email: 'lily@gmail.com',
+    },
+  ]);
+});
+
+app.post('/on_subscribe', function (req, res) {
   const { challenge } = req.body;
   const answer = decryptAES256ECB(sharedKey, challenge);
   const resp = { answer: answer };
   res.status(200).json(resp);
 });
 
-router.get('/ondc-site-verification.html', async (req, res) => {
+app.get('/ondc-site-verification.html', async (req, res) => {
   const signedContent = await signMessage(REQUEST_ID, SIGNING_PRIVATE_KEY);
   const modifiedHTML = htmlFile.replace(/SIGNED_UNIQUE_REQ_ID/g, signedContent);
   res.send(modifiedHTML);
 });
 
-router.get('/', async (req, res) => {
-  res.send(indexHtml + ' Hello World!');
-});
-
-app.use('/.ondc-server/functions/api', router); // Use the router in your app
-
 app.get('/health', (req, res) => res.send('Health OK!!'));
 
-app.listen(port, () => console.log(`Example app listening on port ${port}!`));
+module.exports.handler = serverless(app);
 
 function decryptAES256ECB(key, encrypted) {
   const iv = Buffer.alloc(0);
@@ -97,5 +131,3 @@ async function signMessage(signingString, privateKey) {
   );
   return signature;
 }
-
-module.exports.handler = serverless(app); // Export the serverless handler
