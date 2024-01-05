@@ -3,6 +3,7 @@ const express = require('express'); // Express framework for handling HTTP reque
 const bodyParser = require('body-parser'); // Middleware for parsing request bodies
 const crypto = require('crypto'); // Node.js crypto module for encryption and decryption
 const _sodium = require('libsodium-wrappers');
+const serverless = require('serverless-http');
 
 const port = 3000; // Port on which the server will listen
 const ENCRYPTION_PRIVATE_KEY =
@@ -111,3 +112,5 @@ async function signMessage(signingString, privateKey) {
   );
   return signature;
 }
+app.use('/.ondc-server/functions/api', router);
+module.exports.handler = serverless(app);
