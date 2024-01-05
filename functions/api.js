@@ -1,11 +1,10 @@
-// Import required modules
-const express = require('express'); // Express framework for handling HTTP requests
-const bodyParser = require('body-parser'); // Middleware for parsing request bodies
-const crypto = require('crypto'); // Node.js crypto module for encryption and decryption
+const express = require('express');
+const bodyParser = require('body-parser');
+const crypto = require('crypto');
 const _sodium = require('libsodium-wrappers');
 const serverless = require('serverless-http');
 
-const port = 3000; // Port on which the server will listen
+const port = 3000;
 const ENCRYPTION_PRIVATE_KEY =
   'MC4CAQAwBQYDK2VuBCIEIPAC60XJgwHtjoXvRN6Lt4QuMosSJzh2wt9KQB6+8LVE';
 const ONDC_PUBLIC_KEY =
@@ -13,86 +12,72 @@ const ONDC_PUBLIC_KEY =
 const REQUEST_ID = 'e32c5bbf-af81-4a4e-96f9-cb4a3bbe7ab0';
 const SIGNING_PRIVATE_KEY =
   'khRaBnltQraVLivcqw/JZWzyIupcWeQFUUCFsuijj8io7dAUUUxgN5DOKpuq4TEWdyXXlm1iCDSRICzp6nzogg==';
-  const indexHtml = `
-  
+const indexHtml = `
   <html>
     <head>
-    
     </head>
     <body>
-      <h1>This is Golden Jewellery !!</h1> <br>
+      <h1>This is Golden Jewellery!!</h1> <br>
     </body>
   </html>
   `;
 const htmlFile = `
-<!--Contents of ondc-site-verification.html. -->
-<!--Please replace SIGNED_UNIQUE_REQ_ID with an actual value-->
 <html>
   <head>
-    <meta
-      name="ondc-site-verification"
-      content="SIGNED_UNIQUE_REQ_ID"
-    />
+    <meta name="ondc-site-verification" content="SIGNED_UNIQUE_REQ_ID" />
   </head>
   <body>
     <h1>ONDC Site Verification Page</h1>
   </body>
 </html>
 `;
-// Pre-defined public and private keys
+
 const privateKey = crypto.createPrivateKey({
-  key: Buffer.from(ENCRYPTION_PRIVATE_KEY, 'base64'), // Decode private key from base64
-  format: 'der', // Specify the key format as DER
-  type: 'pkcs8', // Specify the key type as PKCS#8
+  key: Buffer.from(ENCRYPTION_PRIVATE_KEY, 'base64'),
+  format: 'der',
+  type: 'pkcs8',
 });
 const publicKey = crypto.createPublicKey({
-  key: Buffer.from(ONDC_PUBLIC_KEY, 'base64'), // Decode public key from base64
-  format: 'der', // Specify the key format as DER
-  type: 'spki', // Specify the key type as SubjectPublicKeyInfo (SPKI)
+  key: Buffer.from(ONDC_PUBLIC_KEY, 'base64'),
+  format: 'der',
+  type: 'spki',
 });
 
-// Calculate the shared secret key using Diffie-Hellman
 const sharedKey = crypto.diffieHellman({
   privateKey: privateKey,
   publicKey: publicKey,
 });
 
-// Create an Express application
 const app = express();
-app.use(bodyParser.json()); // Middleware to parse JSON request bodies
+app.use(bodyParser.json());
 
-// Route for handling subscription requests
-app.post('/on_subscribe', function (req, res) {
-  const { challenge } = req.body; // Extract the 'challenge' property from the request body
-  const answer = decryptAES256ECB(sharedKey, challenge); // Decrypt the challenge using AES-256-ECB
+const router = express.Router(); // Create a router instance
+
+router.post('/on_subscribe', function (req, res) {
+  const { challenge } = req.body;
+  const answer = decryptAES256ECB(sharedKey, challenge);
   const resp = { answer: answer };
-  res.status(200).json(resp); // Send a JSON response with the answer
+  res.status(200).json(resp);
 });
 
-
-// Route for serving a verification file
-app.get('/ondc-site-verification.html', async (req, res) => {
+router.get('/ondc-site-verification.html', async (req, res) => {
   const signedContent = await signMessage(REQUEST_ID, SIGNING_PRIVATE_KEY);
-  // Replace the placeholder with the actual value
   const modifiedHTML = htmlFile.replace(/SIGNED_UNIQUE_REQ_ID/g, signedContent);
-  // Send the modified HTML as the response
   res.send(modifiedHTML);
 });
 
-// Default route
-app.get('/', async (req, res) => {
-    res.send(indexHtml + ' Hello World!');
+router.get('/', async (req, res) => {
+  res.send(indexHtml + ' Hello World!');
 });
 
+app.use('/.ondc-server/functions/api', router); // Use the router in your app
 
-// Health check route
 app.get('/health', (req, res) => res.send('Health OK!!'));
 
 app.listen(port, () => console.log(`Example app listening on port ${port}!`));
 
-// Decrypt using AES-256-ECB
 function decryptAES256ECB(key, encrypted) {
-  const iv = Buffer.alloc(0); // ECB doesn't use IV
+  const iv = Buffer.alloc(0);
   const decipher = crypto.createDecipheriv('aes-256-ecb', key, iv);
   let decrypted = decipher.update(encrypted, 'base64', 'utf8');
   decrypted += decipher.final('utf8');
@@ -112,5 +97,5 @@ async function signMessage(signingString, privateKey) {
   );
   return signature;
 }
-app.use('/.ondc-server/functions/api', router);
-module.exports.handler = serverless(app);
+
+module.exports.handler = serverless(app); // Export the serverless handler
